@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMS-KOM Venue Booking</title>
+    
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px auto; padding: 10px; display: flex; flex-direction: column; gap: 30px; align-items: center; max-width: 1000px; background-color: #f4f7f8; }
+        .container { width: 100%; background: #ffffff; border-radius: 8px; border: 1px solid #ddd; padding: 20px; box-sizing: border-box; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .header-container { text-align: center; color: #333333; }
+        .header-container h1 { margin: 0; font-size: 1.8em; }
+        .header-container p { margin: 5px 0 0 0; opacity: 0.8; }
+        h3 { margin-top: 0; border-bottom: 2px solid #0366d6; padding-bottom: 10px; display: inline-block;}
+        input, select, button { width: 100%; margin-bottom: 15px; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #0366d6; color: white; border: none; cursor: pointer; font-weight: bold; font-size: 1.1em; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #999; cursor: not-allowed; }
+        .calendar-container { overflow-x: auto; }
+        .fc .fc-button { font-size: 0.85em !important; padding: 4px 8px !important; }
+        .fc-event-pending { background-color: #f39c12 !important; border-color: #e67e22 !important; }
+    </style>
+</head>
+<body>
+
+    <div class="container header-container">
+        <h1>BMS-KOM Venue Booking</h1>
+        <p>Public Request Portal</p>
+    </div>
+
+    <div class="container form-container">
+        <h3>Request a Venue</h3>
+        <form id="activityForm">
+            <label>Your Email Address (For approval updates)</label>
+            <input type="email" id="email" required>
+
+            <label>Activity Name</label>
+            <input type="text" id="name" required>
+            
+            <label>Start Date & Time</label>
+            <input type="datetime-local" id="startDatetime" required>
+
+            <label>End Date & Time</label>
+            <input type="datetime-local" id="endDatetime" required>
+            
+ <label>Location</label>
+            <select id="locationSelect" required>
+                <option value="" disabled selected>Select a location</option>
+                
+                <optgroup label="Anatomage">
+                    <option value="Anatomage 1 @ Dissection Hall">Anatomage 1 @ Dissection Hall</option>
+                    <option value="Anatomage 2 @ Medical Museum">Anatomage 2 @ Medical Museum</option>
+                </optgroup>
+
+                <optgroup label="Smartboard Rooms">
+                    <option value="Smartboard 1 @ EM Projection Room (Level 1)">Smartboard 1 @ EM Projection Room (Level 1)</option>
+                    <option value="Smartboard 2 @ BMS Office (Level 2)">Smartboard 2 @ BMS Office (Level 2)</option>
+                    <option value="Smartboard 3 @ Multipurpose Room (Level 2)">Smartboard 3 @ Multipurpose Room (Level 2)</option>
+                    <option value="Smartboard 4 @ BMS Lab Office (Level 3)">Smartboard 4 @ BMS Lab Office (Level 3)</option>
+                    <option value="Smartboard 5 @ BMOLEP Common Room (Level 3)">Smartboard 5 @ BMOLEP Common Room (Level 3)</option>
+                </optgroup>
+                
+                <option value="Others">Others (Please specify)</option>
+            </select>
+            <input type="text" id="locationOther" placeholder="Enter custom location" style="display: none;">
+
+            
+            <label>Department / Kulliyyah</label>
+            <input type="text" id="team" required placeholder="Who are you booking for?">
+            
+            <button type="submit" id="submitBtn">Submit Booking Request</button>
+        </form>
+        <p id="statusMsg"></p>
+    </div>
+
+    <div class="container calendar-container">
+        <div id="calendar"></div>
+    </div>
+
+    <script>
+        // INSERT YOUR DEPLOYED APPS SCRIPT URL HERE
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwkVAmw_w3_DBeCG2Nmnonvei81nMvV1wwC7pNDy59jpDivDll_nkxtax1yamWcSyOP/exec'; 
+
+        let currentEvents = []; 
+
+        function isOverlapping(newStart, newEnd, venue) {
+            const start = new Date(newStart).getTime();
+            const end = new Date(newEnd).getTime();
+            return currentEvents.some(event => {
+                if (event.extendedProps.location === venue) {
+                    const eventStart = new Date(event.start).getTime();
+                    const eventEnd = event.end ? new Date(event.end).getTime() : eventStart + (60 * 60 * 1000); 
+                    return (start < eventEnd && end > eventStart);
+                }
+                return false;
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const calendarEl = document.getElementById('calendar');
+            
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                displayEventTime: false, 
+                headerToolbar: { left: 'prev,next', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                
+                eventClassNames: function(arg) {
+                    if (arg.event.extendedProps.status === 'Pending') return ['fc-event-pending'];
+                    return [];
+                },
+                
+                events: function(info, successCallback, failureCallback) {
+                    // NOTICE THE ?view=public PARAMETER HERE
+                    fetch(API_URL + '?view=public&t=' + new Date().getTime())
+                        .then(res => res.json())
+                        .then(data => {
+                            currentEvents = data; 
+                            successCallback(data);
+                        })
+                        .catch(err => {
+                            console.error('Error:', err);
+                            failureCallback(err);
+                        });
+                },
+                
+                eventClick: function(info) {
+                    let statusTxt = info.event.extendedProps.status === 'Pending' ? 'Pending Approval' : 'Approved (Booked)';
+                    alert('Venue: ' + info.event.extendedProps.location + '\nStatus: ' + statusTxt + '\n\n*Activity details are private.');
+                }
+            });
+            calendar.render();
+
+            document.getElementById('activityForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('submitBtn');
+                const statusMsg = document.getElementById('statusMsg');
+                
+                const startDT = document.getElementById('startDatetime').value;
+                const endDT = document.getElementById('endDatetime').value;
+                const venue = document.getElementById('locationSelect').value;
+                
+                if (new Date(startDT) >= new Date(endDT)) {
+                    statusMsg.innerText = "End time must be after start time.";
+                    statusMsg.style.color = "red"; return;
+                }
+
+                if (isOverlapping(startDT, endDT, venue)) {
+                    statusMsg.innerText = "Venue is unavailable for this time. Please choose another slot.";
+                    statusMsg.style.color = "red"; return;
+                }
+
+                btn.innerText = 'Submitting...';
+                btn.disabled = true;
+
+                const payload = {
+                    type: 'public', // TELLS APPS SCRIPT THIS IS A PUBLIC BOOKING
+                    email: document.getElementById('email').value,
+                    name: document.getElementById('name').value,
+                    startDatetime: startDT,
+                    endDatetime: endDT,
+                    location: venue,
+                    team: document.getElementById('team').value
+                };
+
+                fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    mode: 'no-cors', 
+                    headers: { 'Content-Type': 'application/json' }
+                }).then(() => {
+                    statusMsg.innerText = "Request submitted! Pending approval.";
+                    statusMsg.style.color = "green";
+                    document.getElementById('activityForm').reset();
+                    btn.innerText = 'Submit Booking Request';
+                    btn.disabled = false;
+                    setTimeout(() => calendar.refetchEvents(), 1500); 
+                    setTimeout(() => statusMsg.innerText = "", 5000);
+                }).catch(err => {
+                    statusMsg.innerText = "Error submitting.";
+                    statusMsg.style.color = "red";
+                    btn.innerText = 'Submit Booking Request';
+                    btn.disabled = false;
+                });
+            });
+        });
+    </script>
+</body>
+</html>
