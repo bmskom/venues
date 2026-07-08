@@ -22,19 +22,27 @@
         button { background: #0366d6; color: white; border: none; cursor: pointer; font-weight: bold; font-size: 1.1em; }
         button:hover { background: #0056b3; }
         button:disabled { background: #999; cursor: not-allowed; }
+        
+        /* Calendar Styling */
         .calendar-container { overflow-x: auto; }
         .fc .fc-button { font-size: 0.85em !important; padding: 4px 8px !important; }
         .fc-event-pending { background-color: #f39c12 !important; border-color: #e67e22 !important; }
+
+        /* Upcoming Events Section styling added */
+        .upcoming-container h3 { margin-top: 0; border-bottom: 2px solid #0366d6; padding-bottom: 10px; display: inline-block; }
+        .event-list { list-style-type: none; padding: 0; margin: 0; display: grid; gap: 15px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+        .event-card { padding: 15px; background: #f9f9f9; border-left: 5px solid #0366d6; border-radius: 4px; border: 1px solid #eaeaea; }
+        .event-card strong { font-size: 1.1em; display: block; margin-bottom: 5px; color: #333; }
+        .event-details { font-size: 0.9em; color: #555; line-height: 1.5; }
     </style>
 </head>
 <body>
 
     <div class="container header-container">
-        <!-- ADDED IMAGE HEADER HERE -->
-        <img src="header3.jpg" alt="BMS-KOM Venue Header" class="header-banner">
+        <img src="header2.jpg" alt="Department Banner" class="header-banner">
         
         <h1>BMS-KOM Venue Booking</h1>
-        <p>Public Request Portal</p>
+        <p>Public Request Portal for Anatomage & Smartboard Rooms</p>
     </div>
 
     <div class="container form-container">
@@ -73,7 +81,6 @@
             </select>
             <input type="text" id="locationOther" placeholder="Enter custom location" style="display: none;">
 
-            
             <label>Department / Kulliyyah</label>
             <input type="text" id="team" required placeholder="Who are you booking for?">
             
@@ -84,6 +91,14 @@
 
     <div class="container calendar-container">
         <div id="calendar"></div>
+    </div>
+
+    <!-- Added Upcoming Events Container -->
+    <div class="container upcoming-container">
+        <h3>Upcoming Approved Activities</h3>
+        <ul id="eventList" class="event-list">
+            <li>Loading upcoming events...</li>
+        </ul>
     </div>
 
     <script>
@@ -105,6 +120,42 @@
             });
         }
 
+        // Added function to render the cards
+        function renderUpcomingEvents(eventsData) {
+            const listEl = document.getElementById('eventList');
+            listEl.innerHTML = ''; 
+
+            const now = new Date();
+            
+            // Filters out past events AND unapproved pending events
+            const upcoming = eventsData
+                .filter(event => new Date(event.start) >= now && event.extendedProps.status === 'Approved')
+                .sort((a, b) => new Date(a.start) - new Date(b.start));
+
+            if (upcoming.length === 0) {
+                listEl.innerHTML = '<li>No upcoming approved events at this time.</li>';
+                return;
+            }
+
+            upcoming.forEach(event => {
+                const li = document.createElement('li');
+                li.className = 'event-card';
+                
+                const startDateObj = new Date(event.start);
+                const dateOptions = { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+                const formattedDate = startDateObj.toLocaleDateString(undefined, dateOptions);
+
+                li.innerHTML = `
+                    <strong>${event.title}</strong>
+                    <div class="event-details">
+                        🕒 ${formattedDate}<br>
+                        📍 ${event.extendedProps.location}
+                    </div>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const calendarEl = document.getElementById('calendar');
             
@@ -119,22 +170,23 @@
                 },
                 
                 events: function(info, successCallback, failureCallback) {
-                    // NOTICE THE ?view=public PARAMETER HERE
                     fetch(API_URL + '?view=public&t=' + new Date().getTime())
                         .then(res => res.json())
                         .then(data => {
                             currentEvents = data; 
                             successCallback(data);
+                            renderUpcomingEvents(data); // Call to render the cards below the calendar
                         })
                         .catch(err => {
                             console.error('Error:', err);
                             failureCallback(err);
+                            document.getElementById('eventList').innerHTML = '<li style="color:red;">Error loading events.</li>';
                         });
                 },
                 
                 eventClick: function(info) {
                     let statusTxt = info.event.extendedProps.status === 'Pending' ? 'Pending Approval' : 'Approved (Booked)';
-                    alert('Venue: ' + info.event.extendedProps.location + '\nStatus: ' + statusTxt + '\n\n*Activity details are private.');
+                    alert('Activity: ' + info.event.title + '\nVenue: ' + info.event.extendedProps.location + '\nStatus: ' + statusTxt);
                 }
             });
             calendar.render();
@@ -162,7 +214,7 @@
                 btn.disabled = true;
 
                 const payload = {
-                    type: 'public', // TELLS APPS SCRIPT THIS IS A PUBLIC BOOKING
+                    type: 'public', 
                     email: document.getElementById('email').value,
                     name: document.getElementById('name').value,
                     startDatetime: startDT,
